@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blackjack (21) - Offline</title>
+  <style>
+    :root{
+      --bg:#0b1220; --card:rgba(255,255,255,.06); --border:rgba(255,255,255,.12);
+      --text:rgba(255,255,255,.92); --muted:rgba(255,255,255,.65);
+      --good:#33d19b; --bad:#ff4d6d; --warn:#ffd166;
+      --r:18px; --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--text);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background: radial-gradient(1100px 650px at 20% 15%, #1c2f55 0%, var(--bg) 60%, #050814 100%);
+    }
+    .wrap{max-width: 980px; margin: 24px auto; padding: 0 16px 40px;}
+    .top{display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
+    h1{margin:0; font-size:22px}
+    .sub{margin-top:6px; color:var(--muted); font-size:13px}
+
+    .grid{display:grid; gap:14px; grid-template-columns: 360px 1fr;}
+    @media (max-width: 900px){ .grid{grid-template-columns: 1fr;} }
+
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+      box-shadow:var(--shadow); padding:14px; backdrop-filter: blur(10px);
+    }
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    label{font-size:12px; color:var(--muted);}
+    input, button{
+      border-radius:12px; border:1px solid var(--border);
+      background:rgba(0,0,0,.18); color:var(--text);
+      padding:10px 12px; font-size:14px; outline:none;
+    }
+    input[type="number"]{ width: 140px; }
+    button{cursor:pointer}
+    button:disabled{opacity:.55; cursor:not-allowed}
+
+    .btn{background:rgba(255,255,255,.10); transition: transform .06s ease, background .2s ease;}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{background: rgba(51, 209, 155, 0.18); border-color: rgba(51, 209, 155, 0.35);}
+    .btn.danger{background: rgba(255, 77, 109, 0.15); border-color: rgba(255, 77, 109, 0.35);}
+    .btn.ghost{background: rgba(255,255,255,.06);}
+
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      font-size:12px; color:var(--muted);
+      border:1px solid var(--border); border-radius:999px;
+      padding:8px 10px; background: rgba(0,0,0,0.14);
+    }
+    .status{margin-top:10px; font-size:13px; color:var(--muted)}
+    .status.good{color:var(--good); font-weight:700}
+    .status.bad{color:var(--bad); font-weight:800}
+    .status.warn{color:var(--warn); font-weight:700}
+
+    .areaTitle{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;}
+    .score{font-weight:900; font-size:16px;}
+    .hand{display:flex; gap:10px; flex-wrap:wrap;}
+    .cardUI{
+      width: 70px; height: 96px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(0,0,0,0.16);
+      display:flex; flex-direction:column; justify-content:space-between;
+      padding: 10px;
+      box-shadow: 0 10px 18px rgba(0,0,0,.25);
+    }
+    .rank{font-weight:900; font-size:18px; line-height:1;}
+    .suit{font-size:18px; opacity:.95}
+    .center{align-self:center; font-size:22px}
+    .muted{color:var(--muted)}
+    .tiny{font-size:12px; color:var(--muted); line-height:1.45}
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      padding: 2px 6px; border-radius: 8px; border: 1px solid var(--border);
+      background: rgba(0,0,0,0.16);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>🂡 Blackjack (21)</h1>
+        <div class="sub">Mục tiêu: gần 21 nhất mà không quá 21. Phím: <span class="kbd">H</span>=Hit, <span class="kbd">S</span>=Stand, <span class="kbd">N</span>=New</div>
+      </div>
+      <div class="pill">💰 Balance: <span id="balTxt">0</span></div>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT: controls -->
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>Balance</label><br/>
+            <input id="balance" type="number" min="0" step="1" />
+          </div>
+          <div>
+            <label>Bet</label><br/>
+            <input id="bet" type="number" min="1" step="1" />
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+
+        <div class="row">
+          <button class="btn primary" id="dealBtn">Deal</button>
+          <button class="btn" id="hitBtn" disabled>Hit</button>
+          <button class="btn danger" id="standBtn" disabled>Stand</button>
+          <button class="btn" id="doubleBtn" disabled>Double</button>
+          <button class="btn ghost" id="resetBtn">Reset</button>
+        </div>
+
+        <div class="status" id="status">Nhấn Deal để chia bài.</div>
+
+        <div style="height:12px"></div>
+        <div class="card" style="box-shadow:none;">
+          <div class="tiny">
+            Luật đơn giản:
+            <ul>
+              <li>Dealer rút đến khi ≥ 17 thì dừng.</li>
+              <li>A có thể tính 1 hoặc 11 để lợi nhất.</li>
+              <li>Blackjack = 21 với 2 lá đầu (A + 10/J/Q/K).</li>
+              <li>Double: chỉ được ở lượt đầu, cược gấp đôi và rút đúng 1 lá rồi Stand.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: table -->
+      <div class="card">
+        <div class="card" style="box-shadow:none;">
+          <div class="areaTitle">
+            <div class="pill">🎩 Dealer</div>
+            <div class="score">Score: <span id="dealerScore" class="muted">?</span></div>
+          </div>
+          <div class="hand" id="dealerHand"></div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div class="card" style="box-shadow:none;">
+          <div class="areaTitle">
+            <div class="pill">🧑 Player</div>
+            <div class="score">Score: <span id="playerScore">0</span></div>
+          </div>
+          <div class="hand" id="playerHand"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ====== LocalStorage ======
+  const LS_BAL = "bj_balance_v1";
+  const LS_BET = "bj_bet_v1";
+
+  // ====== DOM ======
+  const balanceEl = document.getElementById("balance");
+  const betEl = document.getElementById("bet");
+  const balTxt = document.getElementById("balTxt");
+
+  const dealBtn = document.getElementById("dealBtn");
+  const hitBtn = document.getElementById("hitBtn");
+  const standBtn = document.getElementById("standBtn");
+  const doubleBtn = document.getElementById("doubleBtn");
+  const resetBtn = document.getElementById("resetBtn");
+
+  const statusEl = document.getElementById("status");
+  const dealerHandEl = document.getElementById("dealerHand");
+  const playerHandEl = document.getElementById("playerHand");
+  const dealerScoreEl = document.getElementById("dealerScore");
+  const playerScoreEl = document.getElementById("playerScore");
+
+  // ====== State ======
+  let deck = [];
+  let player = [];
+  let dealer = [];
+  let inRound = false;
+  let hideDealerHole = true;
+  let bet = 10;
+  let balance = 1000;
+  let betCommitted = 0; // bet for current round
+  let playerActed = false; // after hit/stand/double
+  let roundFinished = false;
+
+  // ====== Helpers ======
+  const SUITS = ["♠","♥","♦","♣"];
+  const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+  function setStatus(msg, kind=""){
+    statusEl.className = "status " + (kind||"");
+    statusEl.textContent = msg;
+  }
+  function save(){
+    localStorage.setItem(LS_BAL, String(balance));
+    localStorage.setItem(LS_BET, String(bet));
+  }
+  function load(){
+    const b = localStorage.getItem(LS_BAL);
+    const bt = localStorage.getItem(LS_BET);
+    if (b !== null) balance = Math.max(0, Math.floor(Number(b)));
+    if (bt !== null) bet = Math.max(1, Math.floor(Number(bt)));
+    balanceEl.value = balance;
+    betEl.value = bet;
+    balTxt.textContent = balance;
+  }
+
+  function newDeck(){
+    deck = [];
+    for (const s of SUITS){
+      for (const r of RANKS){
+        deck.push({r, s});
+      }
+    }
+    // shuffle
+    for (let i=deck.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+  }
+
+  function draw(){
+    if (deck.length === 0) newDeck();
+    return deck.pop();
+  }
+
+  function cardValueRank(r){
+    if (r === "A") return 11;
+    if (r === "K" || r === "Q" || r === "J") return 10;
+    return Number(r);
+  }
+
+  // Best score with A as 1/11
+  function scoreHand(hand){
+    let total = 0;
+    let aces = 0;
+    for (const c of hand){
+      total += cardValueRank(c.r);
+      if (c.r === "A") aces++;
+    }
+    while (total > 21 && aces > 0){
+      total -= 10; // turn an Ace 11->1
+      aces--;
+    }
+    return total;
+  }
+
+  function isBlackjack(hand){
+    if (hand.length !== 2) return false;
+    const s = scoreHand(hand);
+    return s === 21;
+  }
+
+  function renderHand(el, hand, {hideHole=false} = {}){
+    el.innerHTML = "";
+    for (let i=0;i<hand.length;i++){
+      const c = hand[i];
+      const d = document.createElement("div");
+      d.className = "cardUI";
+
+      if (hideHole && i === 1){
+        d.innerHTML = `<div class="rank muted">?</div><div class="center muted">🂠</div><div class="suit muted">?</div>`;
+      } else {
+        d.innerHTML = `
+          <div class="rank">${c.r}</div>
+          <div class="center">${c.s}</div>
+          <div class="suit">${c.s}</div>
+        `;
+      }
+      el.appendChild(d);
+    }
+  }
+
+  function updateUI(){
+    balTxt.textContent = balance;
+    balanceEl.value = balance;
+    betEl.value = bet;
+
+    renderHand(playerHandEl, player);
+    renderHand(dealerHandEl, dealer, {hideHole: hideDealerHole});
+
+    playerScoreEl.textContent = scoreHand(player);
+
+    if (hideDealerHole){
+      dealerScoreEl.textContent = "?";
+    } else {
+      dealerScoreEl.textContent = scoreHand(dealer);
+    }
+
+    dealBtn.disabled = inRound;
+    hitBtn.disabled = !inRound || roundFinished;
+    standBtn.disabled = !inRound || roundFinished;
+    // Double: only before player acted (no hit/stand yet), and must afford extra bet
+    const canDouble = inRound && !roundFinished && !playerActed && (balance >= betCommitted);
+    doubleBtn.disabled = !canDouble;
+  }
+
+  function endRound(result, payout){
+    // payout: amount added to balance (could be 0, could be >0)
+    roundFinished = true;
+    inRound = false;
+    hideDealerHole = false;
+
+    balance += payout;
+    save();
+
+    updateUI();
+
+    if (result === "win") setStatus(`✅ Bạn thắng! +${payout}`, "good");
+    else if (result === "lose") setStatus(`❌ Bạn thua!`, "bad");
+    else setStatus(`🤝 Hòa (push). Hoàn cược +${payout}`, "warn");
+  }
+
+  function settle(){
+    // dealer plays
+    hideDealerHole = false;
+
+    let ps = scoreHand(player);
+    let ds = scoreHand(dealer);
+
+    // Dealer draws to 17+
+    while (ds < 17){
+      dealer.push(draw());
+      ds = scoreHand(dealer);
+    }
+
+    // compare
+    updateUI();
+
+    if (ps > 21){
+      endRound("lose", 0);
+      return;
+    }
+    if (ds > 21){
+      // player wins: get 2*betCommitted back (profit = betCommitted)
+      endRound("win", betCommitted * 2);
+      return;
+    }
+    if (ps > ds){
+      endRound("win", betCommitted * 2);
+      return;
+    }
+    if (ps < ds){
+      endRound("lose", 0);
+      return;
+    }
+    // push: get bet back
+    endRound("push", betCommitted);
+  }
+
+  function deal(){
+    bet = Math.max(1, Math.floor(Number(betEl.value || 0)));
+    balance = Math.max(0, Math.floor(Number(balanceEl.value || 0)));
+
+    if (bet > balance){
+      setStatus("Bet lớn hơn Balance — chỉnh lại nha.", "bad");
+      updateUI();
+      return;
+    }
+
+    // init round
+    newDeck();
+    player = [draw(), draw()];
+    dealer = [draw(), draw()];
+
+    inRound = true;
+    roundFinished = false;
+    playerActed = false;
+    hideDealerHole = true;
+
+    // commit bet
+    betCommitted = bet;
+    balance -= betCommitted;
+
+    save();
+
+    // immediate blackjack checks
+    const pBJ = isBlackjack(player);
+    const dBJ = isBlackjack(dealer);
+
+    if (pBJ || dBJ){
+      hideDealerHole = false;
+      const ps = scoreHand(player);
+      const ds = scoreHand(dealer);
+
+      // Payout rules (simple):
+      // - player blackjack wins 3:2 (profit 1.5x) if dealer not blackjack
+      // - if both blackjack => push
+      // - if dealer blackjack => lose
+      if (pBJ && !dBJ){
+        const payout = Math.floor(betCommitted * 2.5); // returns bet + 1.5*bet
+        endRound("win", payout);
+        return;
+      }
+      if (pBJ && dBJ){
+        endRound("push", betCommitted); // return bet
+        return;
+      }
+      if (!pBJ && dBJ){
+        endRound("lose", 0);
+        return;
+      }
+    }
+
+    setStatus("Đã chia bài. Bạn chọn Hit / Stand (hoặc Double nếu muốn).", "muted");
+    updateUI();
+  }
+
+  function hit(){
+    if (!inRound || roundFinished) return;
+    playerActed = true;
+    player.push(draw());
+    const ps = scoreHand(player);
+    updateUI();
+    if (ps > 21){
+      hideDealerHole = false;
+      updateUI();
+      endRound("lose", 0);
+    }
+  }
+
+  function stand(){
+    if (!inRound || roundFinished) return;
+    playerActed = true;
+    settle();
+  }
+
+  function doubleDown(){
+    if (!inRound || roundFinished) return;
+    // must afford extra bet
+    if (balance < betCommitted) return;
+    playerActed = true;
+
+    // take extra bet
+    balance -= betCommitted;
+    betCommitted *= 2;
+    save();
+
+    // draw exactly one card then stand
+    player.push(draw());
+    updateUI();
+
+    const ps = scoreHand(player);
+    if (ps > 21){
+      hideDealerHole = false;
+      updateUI();
+      endRound("lose", 0);
+      return;
+    }
+    settle();
+  }
+
+  function resetAll(){
+    balance = 1000;
+    bet = 10;
+    player = [];
+    dealer = [];
+    inRound = false;
+    roundFinished = false;
+    hideDealerHole = true;
+    betCommitted = 0;
+    playerActed = false;
+    save();
+    setStatus("Nhấn Deal để chia bài.", "muted");
+    updateUI();
+  }
+
+  // ====== Events ======
+  dealBtn.addEventListener("click", deal);
+  hitBtn.addEventListener("click", hit);
+  standBtn.addEventListener("click", stand);
+  doubleBtn.addEventListener("click", doubleDown);
+  resetBtn.addEventListener("click", resetAll);
+
+  balanceEl.addEventListener("input", ()=>{
+    balance = Math.max(0, Math.floor(Number(balanceEl.value||0)));
+    balTxt.textContent = balance;
+    save();
+  });
+  betEl.addEventListener("input", ()=>{
+    bet = Math.max(1, Math.floor(Number(betEl.value||1)));
+    save();
+  });
+
+  window.addEventListener("keydown", (e)=>{
+    const k = e.key.toLowerCase();
+    if (k === "n") deal();
+    if (k === "h") hit();
+    if (k === "s") stand();
+  });
+
+  // ====== Init ======
+  load();
+  resetAll();
+})();
+</script>
+</body>
+</html>
